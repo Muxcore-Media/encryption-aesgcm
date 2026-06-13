@@ -1,0 +1,28 @@
+[Unit]
+Description=MuxCore Module - encryption-aesgcm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=muxcore
+Group=muxcore
+ExecStart=/usr/local/bin/encryption-aesgcm \
+  --muxcore-mesh-addr localhost:9090 \
+  --muxcore-module-id encryption-aesgcm
+Environment=ENCRYPTION_GRPC_ADDR=:9601
+Environment=ENCRYPTION_KEY_FILE=/var/lib/encryption-aesgcm/master.key
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+; Security hardening
+CapabilityBoundingSet=
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/encryption-aesgcm
+
+[Install]
+WantedBy=multi-user.target

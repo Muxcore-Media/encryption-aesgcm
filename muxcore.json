@@ -1,0 +1,16 @@
+{
+  "name": "Encryption AES-GCM",
+  "description": "AES-256-GCM envelope encryption provider with static master key",
+  "version": "0.1.0",
+  "author": "MuxCore",
+  "roles": ["infrastructure"],
+  "capabilities": ["encryption"],
+  "contracts": [
+    {
+      "repo": "github.com/Muxcore-Media/core/pkg/contracts",
+      "interface": "EncryptionProvider",
+      "version": "v0.4.0"
+    }
+  ],
+  "minCoreVersion": "0.4.0"
+}
