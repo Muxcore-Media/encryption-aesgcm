@@ -23,7 +23,7 @@ cd ../core
 MUXCORE_INSECURE_DISABLE_TLS=true ./muxcored
 
 # Terminal 2: start module
-make build && ./encryption-aesgcm --muxcore-mesh-addr localhost:9090
+make build && MUXCORE_INSECURE_DISABLE_TLS=true ./encryption-aesgcm --muxcore-mesh-addr localhost:9090
 ```
 
 ## Running Tests
@@ -60,10 +60,10 @@ refactor/<short-description>
 
 ## Pull Request Process
 
-1. Branch from `main`.
+1. Branch from `master`.
 2. Make your changes with tests.
 3. Run `make ci` locally — it must pass.
-4. Open a PR against `main`.
+4. Open a PR against `master`.
 5. Squash-merge preferred.
 
 ## Security Vulnerabilities

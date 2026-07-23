@@ -9,12 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Encryption proto definition (`muxcore/encryption/v1/encryption.proto`) with gRPC service spec
-- Generated Go code from encryption proto (messages + gRPC stubs)
-- Full test suite: module info, encrypt/decrypt round-trip, key generation, lifecycle
-- AES-256-GCM encrypt/decrypt with random nonce prepended to ciphertext
-- Master key loading: `ENCRYPTION_MASTER_KEY` env var (hex) or auto-generate to `ENCRYPTION_KEY_FILE`
-- Key rotation: returns standard "rotation not supported" error
+- Versioned JSON keyring with active key id and historical keys
+- `RotateKey`: generate new active key, persist ring `0600`, retain old keys for Decrypt
+- Versioned ciphertext wire format (`MXE1` + key id + nonce + ct); legacy `[nonce][ct+tag]` still decrypts via key id `0`
+- Tests: encrypt→rotate→decrypt old, dual-version decrypt, TrimSpace reload after generate
+
+### Fixed
+
+- Hex key file load now `TrimSpace`s so newline-terminated files reload after generate
+
+### Changed
+
+- Description / version reflect rotation support (no longer a static-key-only provider)
+
+### Previously
+
+- Sidecar module serving core `EncryptionService` gRPC API (`muxcore/encryption/v1`)
+- AES-256-GCM encrypt/decrypt; master key from `ENCRYPTION_MASTER_KEY` or `ENCRYPTION_KEY_FILE`
 - Production deployment: Dockerfile, docker-compose, systemd unit
 - Contract declaration: `EncryptionProvider` with `MinCoreVersion: 0.4.0`
 - Module declares capability `"encryption"`

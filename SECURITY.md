@@ -8,7 +8,7 @@ Pre-1.0 beta software. APIs and interfaces are not yet stable.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| main    | :white_check_mark: |
+| master  | :white_check_mark: |
 | < 0.1   | :x:                |
 
 ## Reporting a Vulnerability
