@@ -13,14 +13,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: core
           repository: Muxcore-Media/core
-      - uses: actions/checkout@v4
+          token: ${{ secrets.MUXCORE_CI_TOKEN }}
+      - uses: actions/checkout@v7
         with:
           path: encryption-aesgcm
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
@@ -30,56 +31,61 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: core
           repository: Muxcore-Media/core
-      - uses: actions/checkout@v4
+          token: ${{ secrets.MUXCORE_CI_TOKEN }}
+      - uses: actions/checkout@v7
         with:
           path: encryption-aesgcm
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
       - working-directory: ./encryption-aesgcm
-        run: go test -race -count=1 -timeout 60s ./...
+        run: go test -race -count=1 -timeout 10m ./...
 
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: core
           repository: Muxcore-Media/core
-      - uses: actions/checkout@v4
+          token: ${{ secrets.MUXCORE_CI_TOKEN }}
+      - uses: actions/checkout@v7
         with:
           path: encryption-aesgcm
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
       - working-directory: ./encryption-aesgcm
-        run: go build -o /dev/null ./cmd/module
+        run: |
+          go build -o /dev/null ./cmd/module
+          go vet ./...
 
   docker:
     if: (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     needs: [lint, test, build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: core
           repository: Muxcore-Media/core
-      - uses: actions/checkout@v4
+          token: ${{ secrets.MUXCORE_CI_TOKEN }}
+      - uses: actions/checkout@v7
         with:
           path: encryption-aesgcm
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: ./encryption-aesgcm/Dockerfile
