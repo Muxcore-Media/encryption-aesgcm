@@ -351,3 +351,46 @@ func TestKeyGeneration(t *testing.T) {
 		t.Fatalf("keyring file must not be group/other accessible, mode=%o", fi.Mode().Perm())
 	}
 }
+
+func TestEncryptRotateRestartDecrypt(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "keyring.json")
+	ctx := context.Background()
+
+	m1 := NewModule(Config{KeyFile: keyFile, GRPCAddr: ":0"})
+	if err := m1.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	plaintext := []byte("survive-restart")
+	blob, err := m1.Encrypt(ctx, &encryptionv1.EncryptRequest{Plaintext: plaintext})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m1.RotateKey(ctx, &encryptionv1.RotateKeyRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m1.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := os.Stat(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o600 {
+		t.Fatalf("keyring mode %o, want 0600", st.Mode().Perm())
+	}
+
+	// New process: load persisted keyring only (no ENCRYPTION_MASTER_KEY).
+	m2 := NewModule(Config{KeyFile: keyFile, GRPCAddr: ":0"})
+	if err := m2.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	decrypted, err := m2.Decrypt(ctx, &encryptionv1.DecryptRequest{Ciphertext: blob.Ciphertext})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decrypted.Plaintext) != string(plaintext) {
+		t.Fatalf("expected %q, got %q", plaintext, decrypted.Plaintext)
+	}
+}
