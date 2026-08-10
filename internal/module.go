@@ -90,7 +90,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Encryption AES-GCM",
-		Version:      "0.2.0",
+		Version:      "0.2.3",
 		Roles:        []string{"infrastructure"},
 		Description:  "AES-256-GCM envelope encryption with versioned keyring and key rotation",
 		Author:       "MuxCore",
