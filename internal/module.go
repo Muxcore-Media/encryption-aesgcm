@@ -92,11 +92,11 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Encryption AES-GCM",
-		Version:      "0.2.5",
+		Version:      "0.2.6",
 		Roles:        []string{"infrastructure"},
 		Description:  "AES-256-GCM envelope encryption with versioned keyring and key rotation",
 		Author:       "MuxCore",
-		Capabilities: []string{contracts.CapabilityEncryption, "encryption.aesgcm"},
+		Capabilities: []string{contracts.CapabilityEncryption, "encryption.aesgcm", "settings"},
 		Contracts: []contracts.ContractDeclaration{
 			{
 				Repo:      "github.com/Muxcore-Media/core/pkg/contracts",
