@@ -21,6 +21,7 @@ import (
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	encryptionv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/encryption/v1"
+	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
 )
 
 const (
@@ -46,6 +47,7 @@ type Module struct {
 	encryptionv1.UnimplementedEncryptionServiceServer
 
 	mu     sync.RWMutex
+	cfgMu  sync.RWMutex
 	active uint32
 	keys   map[uint32]*keyEntry
 
@@ -90,7 +92,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Encryption AES-GCM",
-		Version:      "0.2.4",
+		Version:      "0.2.5",
 		Roles:        []string{"infrastructure"},
 		Description:  "AES-256-GCM envelope encryption with versioned keyring and key rotation",
 		Author:       "MuxCore",
@@ -125,6 +127,7 @@ func (m *Module) Init(ctx context.Context) error {
 func (m *Module) Start(ctx context.Context) error {
 	m.grpcSrv = grpc.NewServer()
 	encryptionv1.RegisterEncryptionServiceServer(m.grpcSrv, m)
+	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 
 	go func() {
 		slog.Info("encryption-aesgcm gRPC service started", "addr", m.grpcAddr)
