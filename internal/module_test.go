@@ -353,6 +353,10 @@ func TestKeyGeneration(t *testing.T) {
 }
 
 func TestEncryptRotateRestartDecrypt(t *testing.T) {
+	// Real local integration: encrypt → rotate → Stop/Init restart → decrypt
+	// old versioned + legacy blobs; new Encrypt uses rotated active key.
+	t.Setenv("ENCRYPTION_MASTER_KEY", "")
+
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "keyring.json")
 	ctx := context.Background()
@@ -361,14 +365,45 @@ func TestEncryptRotateRestartDecrypt(t *testing.T) {
 	if err := m1.Init(ctx); err != nil {
 		t.Fatal(err)
 	}
-	plaintext := []byte("survive-restart")
-	blob, err := m1.Encrypt(ctx, &encryptionv1.EncryptRequest{Plaintext: plaintext})
+	if err := m1.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	oldPlain := []byte("survive-restart")
+	oldBlob, err := m1.Encrypt(ctx, &encryptionv1.EncryptRequest{Plaintext: oldPlain})
 	if err != nil {
 		t.Fatal(err)
 	}
+	oldActive := m1.active
+
+	// Legacy (unversioned) ciphertext under key id 0 must also survive restart.
+	legacyPlain := []byte("legacy-survive")
+	m1.mu.RLock()
+	legacyEntry := m1.keys[legacyKeyID]
+	m1.mu.RUnlock()
+	if legacyEntry == nil {
+		t.Fatal("expected legacy key id 0 after bootstrap")
+	}
+	nonce := make([]byte, legacyEntry.aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	legacyBlob := append(nonce, legacyEntry.aead.Seal(nil, nonce, legacyPlain, nil)...)
+
 	if _, err := m1.RotateKey(ctx, &encryptionv1.RotateKeyRequest{}); err != nil {
 		t.Fatal(err)
 	}
+	if m1.active == oldActive {
+		t.Fatal("active key id must change after rotation")
+	}
+	rotatedActive := m1.active
+
+	newPlain := []byte("after-rotate-before-restart")
+	newBlob, err := m1.Encrypt(ctx, &encryptionv1.EncryptRequest{Plaintext: newPlain})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if err := m1.Stop(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -377,8 +412,23 @@ func TestEncryptRotateRestartDecrypt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o600 {
-		t.Fatalf("keyring mode %o, want 0600", st.Mode().Perm())
+	if st.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("keyring must not be group/other accessible, mode=%o", st.Mode().Perm())
+	}
+
+	data, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ring keyringFile
+	if err := json.Unmarshal(data, &ring); err != nil {
+		t.Fatal(err)
+	}
+	if ring.Active != rotatedActive {
+		t.Fatalf("persisted active %d != %d", ring.Active, rotatedActive)
+	}
+	if len(ring.Keys) < 2 {
+		t.Fatalf("expected multi-key ring after rotate, got %d", len(ring.Keys))
 	}
 
 	// New process: load persisted keyring only (no ENCRYPTION_MASTER_KEY).
@@ -386,11 +436,49 @@ func TestEncryptRotateRestartDecrypt(t *testing.T) {
 	if err := m2.Init(ctx); err != nil {
 		t.Fatal(err)
 	}
-	decrypted, err := m2.Decrypt(ctx, &encryptionv1.DecryptRequest{Ciphertext: blob.Ciphertext})
+	if err := m2.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = m2.Stop(ctx) }()
+
+	if m2.active != rotatedActive {
+		t.Fatalf("after restart active=%d, want %d", m2.active, rotatedActive)
+	}
+	if len(m2.keys) < 2 {
+		t.Fatalf("after restart expected >=2 keys, got %d", len(m2.keys))
+	}
+
+	for _, tc := range []struct {
+		name string
+		ct   []byte
+		want []byte
+	}{
+		{"pre-rotate versioned", oldBlob.Ciphertext, oldPlain},
+		{"post-rotate versioned", newBlob.Ciphertext, newPlain},
+		{"legacy unversioned", legacyBlob, legacyPlain},
+	} {
+		dec, err := m2.Decrypt(ctx, &encryptionv1.DecryptRequest{Ciphertext: tc.ct})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if string(dec.Plaintext) != string(tc.want) {
+			t.Fatalf("%s: got %q, want %q", tc.name, dec.Plaintext, tc.want)
+		}
+	}
+
+	postRestartPlain := []byte("after-restart")
+	postBlob, err := m2.Encrypt(ctx, &encryptionv1.EncryptRequest{Plaintext: postRestartPlain})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(decrypted.Plaintext) != string(plaintext) {
-		t.Fatalf("expected %q, got %q", plaintext, decrypted.Plaintext)
+	if !isVersionedBlob(postBlob.Ciphertext) {
+		t.Fatal("post-restart ciphertext must be versioned")
+	}
+	dec, err := m2.Decrypt(ctx, &encryptionv1.DecryptRequest{Ciphertext: postBlob.Ciphertext})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(dec.Plaintext) != string(postRestartPlain) {
+		t.Fatalf("post-restart round-trip: got %q", dec.Plaintext)
 	}
 }

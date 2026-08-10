@@ -1,17 +1,5 @@
 # Changelog
 
-
-## [0.2.6] — 2026-08-10
-
-### Changed
-
-- Advertise `settings` capability for admin-ui Settings discovery
-
-## [0.2.4] — 2026-08-10
-
-### Fixed
-- Sync Info()/muxcore.json version to **0.2.4**.
-
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -19,15 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strengthened `TestEncryptRotateRestartDecrypt`: full Start/Stop restart, legacy + multi-key decrypt after rotate, post-restart Encrypt
+
+### Changed
+
+- CI and Release workflows run on `self-hosted` (no GitHub-hosted runners; release no longer checks out a sibling `core` tree)
+- Dockerfile builds from published `core@v0.5.x` pins (no sibling `COPY core/`)
+
+## [0.2.6] — 2026-08-10
+
+### Changed
+
+- Advertise `settings` capability for admin-ui Settings discovery
+
+## [0.2.5] — 2026-08-10
+
+### Added
+
+- Expose `key_file` via RegisterSettings mesh
+
+## [0.2.4] — 2026-08-10
+
+### Fixed
+
+- Sync Info()/muxcore.json version to **0.2.4**
+
 ## [0.2.3] — 2026-08-10
 
 ### Added
 
 - `TestEncryptRotateRestartDecrypt`: ciphertext survives rotate + process restart; keyring file mode `0600`
-
-
-### Added
-
 - Versioned JSON keyring with active key id and historical keys
 - `RotateKey`: generate new active key, persist ring `0600`, retain old keys for Decrypt
 - Versioned ciphertext wire format (`MXE1` + key id + nonce + ct); legacy `[nonce][ct+tag]` still decrypts via key id `0`
