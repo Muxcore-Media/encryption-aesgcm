@@ -32,7 +32,7 @@ func TestSettingsKeyFileReload(t *testing.T) {
 	if err := m.Init(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	defer m.Stop(t.Context())
+	defer func() { _ = m.Stop(t.Context()) }()
 
 	enc, err := m.Encrypt(t.Context(), &encryptionv1.EncryptRequest{Plaintext: []byte("hello")})
 	if err != nil {
