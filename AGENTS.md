@@ -7,8 +7,8 @@ MuxCore sidecar module (`encryption-aesgcm`). Workspace deploy and SSH: [`../AGE
 | Field | Value |
 |-------|-------|
 | Directory | `encryption-aesgcm` |
-| Capabilities | see muxcore.json |
-| Contracts | none declared |
+| Capabilities | `encryption`, `encryption.aesgcm`, `settings` |
+| Contracts | `EncryptionProvider` (`core/pkg/contracts`); gRPC `EncryptionService` |
 
 ## Agent rules
 
@@ -17,10 +17,11 @@ MuxCore sidecar module (`encryption-aesgcm`). Workspace deploy and SSH: [`../AGE
 - Match existing Go patterns; run `gofmt` and package tests before finishing.
 - Cross-module events: prefer `github.com/Muxcore-Media/contracts-media/events` over deprecated `core/pkg/contracts` aliases.
 - Do not edit polluted workspace dumps (see `MASTER-ROADMAP.md` Appendix H).
+- Default gRPC bind is loopback (`127.0.0.1:9601`); back up `ENCRYPTION_KEY_FILE`.
 
 ## Build
 
 ```bash
 cd encryption-aesgcm
-go test ./...
+nix-shell -p go --run 'go test ./...'
 ```

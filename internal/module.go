@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -16,8 +17,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	encryptionv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/encryption/v1"
@@ -25,10 +29,12 @@ import (
 )
 
 const (
-	blobMagic      = "MXE1"
-	blobHeaderSize = 4 + 4 // magic + key_id
-	legacyKeyID    = uint32(0)
-	keyBytes       = 32
+	blobMagic         = "MXE1"
+	blobHeaderSize    = 4 + 4 // magic + key_id
+	legacyKeyID       = uint32(0)
+	keyBytes          = 32
+	defaultGRPCAddr   = "127.0.0.1:9601"
+	maxPlaintextBytes = 16 * 1024 * 1024
 )
 
 type keyEntry struct {
@@ -72,7 +78,7 @@ func NewModule(cfg Config) *Module {
 		cfg.KeyFile = "/var/lib/encryption-aesgcm/master.key"
 	}
 	if cfg.GRPCAddr == "" {
-		cfg.GRPCAddr = ":9601"
+		cfg.GRPCAddr = defaultGRPCAddr
 	}
 	if v := os.Getenv("ENCRYPTION_KEY_FILE"); v != "" {
 		cfg.KeyFile = v
@@ -125,7 +131,11 @@ func (m *Module) Init(ctx context.Context) error {
 }
 
 func (m *Module) Start(ctx context.Context) error {
-	m.grpcSrv = grpc.NewServer()
+	maxRecv := maxPlaintextBytes + blobHeaderSize + 32 // nonce + GCM overhead headroom
+	m.grpcSrv = grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxRecv),
+		grpc.MaxSendMsgSize(maxRecv),
+	)
 	encryptionv1.RegisterEncryptionServiceServer(m.grpcSrv, m)
 	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 
@@ -165,7 +175,12 @@ func (m *Module) Encrypt(ctx context.Context, req *encryptionv1.EncryptRequest) 
 	m.mu.RUnlock()
 
 	if entry == nil {
-		return nil, fmt.Errorf("encryption not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "encryption not initialized")
+	}
+
+	plaintext := req.GetPlaintext()
+	if len(plaintext) > maxPlaintextBytes {
+		return nil, status.Errorf(codes.InvalidArgument, "plaintext exceeds maximum size of %d bytes", maxPlaintextBytes)
 	}
 
 	nonce := make([]byte, entry.aead.NonceSize())
@@ -173,7 +188,7 @@ func (m *Module) Encrypt(ctx context.Context, req *encryptionv1.EncryptRequest) 
 		return nil, fmt.Errorf("generate nonce: %w", err)
 	}
 
-	ciphertext := entry.aead.Seal(nil, nonce, req.GetPlaintext(), nil)
+	ciphertext := entry.aead.Seal(nil, nonce, plaintext, nil)
 
 	out := make([]byte, 0, blobHeaderSize+len(nonce)+len(ciphertext))
 	out = append(out, blobMagic...)
@@ -189,7 +204,7 @@ func (m *Module) Encrypt(ctx context.Context, req *encryptionv1.EncryptRequest) 
 func (m *Module) Decrypt(ctx context.Context, req *encryptionv1.DecryptRequest) (*encryptionv1.DecryptResponse, error) {
 	data := req.GetCiphertext()
 	if len(data) == 0 {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, status.Error(codes.InvalidArgument, "ciphertext too short")
 	}
 
 	if isVersionedBlob(data) {
@@ -212,7 +227,7 @@ func (m *Module) RotateKey(ctx context.Context, req *encryptionv1.RotateKeyReque
 	defer m.mu.Unlock()
 
 	if len(m.keys) == 0 {
-		return nil, fmt.Errorf("encryption not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "encryption not initialized")
 	}
 
 	var nextID uint32
@@ -260,7 +275,7 @@ func isVersionedBlob(data []byte) bool {
 
 func (m *Module) decryptVersioned(data []byte) ([]byte, error) {
 	if len(data) < blobHeaderSize {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, status.Error(codes.InvalidArgument, "ciphertext too short")
 	}
 	keyID := binary.BigEndian.Uint32(data[4:8])
 
@@ -268,18 +283,18 @@ func (m *Module) decryptVersioned(data []byte) ([]byte, error) {
 	entry := m.keys[keyID]
 	m.mu.RUnlock()
 	if entry == nil {
-		return nil, fmt.Errorf("unknown key id %d", keyID)
+		return nil, status.Errorf(codes.NotFound, "unknown key id %d", keyID)
 	}
 
 	body := data[blobHeaderSize:]
 	nonceSize := entry.aead.NonceSize()
 	if len(body) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, status.Error(codes.InvalidArgument, "ciphertext too short")
 	}
 	nonce, ciphertext := body[:nonceSize], body[nonceSize:]
 	plaintext, err := entry.aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt: %w", err)
+		return nil, status.Errorf(codes.InvalidArgument, "decrypt: %v", err)
 	}
 	return plaintext, nil
 }
@@ -297,17 +312,17 @@ func (m *Module) decryptLegacy(data []byte) ([]byte, error) {
 	}
 	m.mu.RUnlock()
 	if entry == nil {
-		return nil, fmt.Errorf("no legacy key available")
+		return nil, status.Error(codes.NotFound, "no legacy key available")
 	}
 
 	nonceSize := entry.aead.NonceSize()
 	if len(data) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, status.Error(codes.InvalidArgument, "ciphertext too short")
 	}
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
 	plaintext, err := entry.aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt: %w", err)
+		return nil, status.Errorf(codes.InvalidArgument, "decrypt: %v", err)
 	}
 	return plaintext, nil
 }
@@ -381,9 +396,44 @@ func (m *Module) loadEnvKey(v string) error {
 	m.mu.Lock()
 	m.keys = map[uint32]*keyEntry{legacyKeyID: entry}
 	m.active = legacyKeyID
+	persist := !hasJSONKeyringOnDisk(m.keyFile)
+	var persistErr error
+	if persist {
+		persistErr = m.persistRingLocked()
+	}
 	m.mu.Unlock()
-	slog.Info("master key loaded from environment variable")
+	if persistErr != nil {
+		return fmt.Errorf("persist env keyring: %w", persistErr)
+	}
+	if persist {
+		slog.Info("master key loaded from environment and persisted", "path", m.keyFile)
+	} else {
+		slog.Info("master key loaded from environment variable")
+	}
 	return nil
+}
+
+func hasJSONKeyringOnDisk(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	trimmed := strings.TrimSpace(string(data))
+	return trimmed != "" && !isLegacyHexKey(trimmed)
+}
+
+func (m *Module) loadExistingRing() error {
+	if _, err := os.Stat(m.keyFile); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("key file %q does not exist", m.keyFile)
+		}
+		return fmt.Errorf("key file %q: %w", m.keyFile, err)
+	}
+	data, err := os.ReadFile(m.keyFile)
+	if err != nil {
+		return fmt.Errorf("read keyring %s: %w", m.keyFile, err)
+	}
+	return m.loadRingBytes(data)
 }
 
 func (m *Module) loadRingBytes(data []byte) error {
@@ -477,12 +527,46 @@ func (m *Module) persistRingLocked() error {
 	payload = append(payload, '\n')
 
 	tmp := m.keyFile + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return fmt.Errorf("open keyring temp %s: %w", tmp, err)
+	}
+	if _, err := f.Write(payload); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
 		return fmt.Errorf("write keyring temp %s: %w", tmp, err)
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return fmt.Errorf("sync keyring temp %s: %w", tmp, err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("close keyring temp %s: %w", tmp, err)
+	}
+	if err := syncDir(dir); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("sync key directory %s: %w", dir, err)
 	}
 	if err := os.Rename(tmp, m.keyFile); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("replace keyring %s: %w", m.keyFile, err)
+	}
+	if err := syncDir(dir); err != nil {
+		return fmt.Errorf("sync key directory after rename %s: %w", dir, err)
+	}
+	return nil
+}
+
+func syncDir(dir string) error {
+	df, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = df.Close() }()
+	if err := df.Sync(); err != nil && !errors.Is(err, syscall.ENOSYS) && !errors.Is(err, syscall.EPERM) {
+		return err
 	}
 	return nil
 }

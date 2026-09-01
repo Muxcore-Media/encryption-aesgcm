@@ -10,7 +10,7 @@
 ### Clone and build
 
 ```bash
-git clone https://github.com/Muxcore-Media/encryption-aesgcm.git
+git clone https://git.zem.systems/muxcore/encryption-aesgcm.git
 cd encryption-aesgcm
 make build
 ```
