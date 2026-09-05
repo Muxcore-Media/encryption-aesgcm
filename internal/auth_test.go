@@ -215,6 +215,7 @@ func TestAuthorizeEncryptionRPC_AvailableWithoutAuth(t *testing.T) {
 }
 
 func TestModuleStart_RejectsUnauthenticatedOverGRPC(t *testing.T) {
+	t.Setenv("MUXCORE_INSECURE_DISABLE_TLS", "true")
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		t.Fatal(err)
