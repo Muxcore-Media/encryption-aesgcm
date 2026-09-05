@@ -51,17 +51,19 @@ type Module struct {
 	active uint32
 	keys   map[uint32]*keyEntry
 
-	id       string
-	keyFile  string
-	grpcAddr string
-	grpcSrv  *grpc.Server
-	lis      net.Listener
+	id          string
+	keyFile     string
+	grpcAddr    string
+	moduleToken string
+	grpcSrv     *grpc.Server
+	lis         net.Listener
 }
 
 type Config struct {
-	ID       string
-	KeyFile  string
-	GRPCAddr string
+	ID          string
+	KeyFile     string
+	GRPCAddr    string
+	ModuleToken string
 }
 
 func NewModule(cfg Config) *Module {
@@ -72,7 +74,7 @@ func NewModule(cfg Config) *Module {
 		cfg.KeyFile = "/var/lib/encryption-aesgcm/master.key"
 	}
 	if cfg.GRPCAddr == "" {
-		cfg.GRPCAddr = ":9601"
+		cfg.GRPCAddr = "127.0.0.1:9601"
 	}
 	if v := os.Getenv("ENCRYPTION_KEY_FILE"); v != "" {
 		cfg.KeyFile = v
@@ -80,11 +82,15 @@ func NewModule(cfg Config) *Module {
 	if v := os.Getenv("ENCRYPTION_GRPC_ADDR"); v != "" {
 		cfg.GRPCAddr = v
 	}
+	if cfg.ModuleToken == "" {
+		cfg.ModuleToken = moduleTokenFromEnv()
+	}
 	return &Module{
-		id:       cfg.ID,
-		keyFile:  cfg.KeyFile,
-		grpcAddr: cfg.GRPCAddr,
-		keys:     make(map[uint32]*keyEntry),
+		id:          cfg.ID,
+		keyFile:     cfg.KeyFile,
+		grpcAddr:    cfg.GRPCAddr,
+		moduleToken: cfg.ModuleToken,
+		keys:        make(map[uint32]*keyEntry),
 	}
 }
 
@@ -125,7 +131,7 @@ func (m *Module) Init(ctx context.Context) error {
 }
 
 func (m *Module) Start(ctx context.Context) error {
-	m.grpcSrv = grpc.NewServer()
+	m.grpcSrv = grpc.NewServer(grpc.UnaryInterceptor(authUnaryInterceptor(m.moduleToken)))
 	encryptionv1.RegisterEncryptionServiceServer(m.grpcSrv, m)
 	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 
