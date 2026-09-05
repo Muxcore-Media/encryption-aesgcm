@@ -18,10 +18,12 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	encryptionv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/encryption/v1"
 	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
+	"github.com/Muxcore-Media/encryption-aesgcm/internal/grpctls"
 )
 
 const (
@@ -131,7 +133,22 @@ func (m *Module) Init(ctx context.Context) error {
 }
 
 func (m *Module) Start(ctx context.Context) error {
-	m.grpcSrv = grpc.NewServer(grpc.UnaryInterceptor(authUnaryInterceptor(m.moduleToken)))
+	var grpcOpts []grpc.ServerOption
+	tlsCfg, err := grpctls.ServerConfig(m.keyFile)
+	if err != nil {
+		return fmt.Errorf("gRPC TLS: %w", err)
+	}
+	if tlsCfg != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+		slog.Info("encryption-aesgcm gRPC TLS enabled", "addr", m.grpcAddr)
+	} else {
+		slog.Warn("encryption-aesgcm gRPC listening without TLS (dev only)",
+			"addr", m.grpcAddr,
+			"hint", "unset MUXCORE_INSECURE_DISABLE_TLS for production",
+		)
+	}
+	grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(authUnaryInterceptor(m.moduleToken)))
+	m.grpcSrv = grpc.NewServer(grpcOpts...)
 	encryptionv1.RegisterEncryptionServiceServer(m.grpcSrv, m)
 	modulesdk.RegisterSettings(m.grpcSrv, m.id, m)
 

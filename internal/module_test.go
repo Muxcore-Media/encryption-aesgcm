@@ -286,6 +286,7 @@ func TestAvailable(t *testing.T) {
 }
 
 func TestLifecycle(t *testing.T) {
+	t.Setenv("MUXCORE_INSECURE_DISABLE_TLS", "true")
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		t.Fatal(err)
@@ -355,6 +356,7 @@ func TestKeyGeneration(t *testing.T) {
 func TestEncryptRotateRestartDecrypt(t *testing.T) {
 	// Real local integration: encrypt → rotate → Stop/Init restart → decrypt
 	// old versioned + legacy blobs; new Encrypt uses rotated active key.
+	t.Setenv("MUXCORE_INSECURE_DISABLE_TLS", "true")
 	t.Setenv("ENCRYPTION_MASTER_KEY", "")
 
 	dir := t.TempDir()
