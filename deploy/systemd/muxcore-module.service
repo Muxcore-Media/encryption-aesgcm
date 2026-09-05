@@ -10,7 +10,7 @@ Group=muxcore
 ExecStart=/usr/local/bin/encryption-aesgcm \
   --muxcore-mesh-addr localhost:9090 \
   --muxcore-module-id encryption-aesgcm
-Environment=ENCRYPTION_GRPC_ADDR=:9601
+Environment=ENCRYPTION_GRPC_ADDR=127.0.0.1:9601
 Environment=ENCRYPTION_KEY_FILE=/var/lib/encryption-aesgcm/master.key
 Restart=on-failure
 RestartSec=5

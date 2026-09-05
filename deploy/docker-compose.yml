@@ -10,7 +10,7 @@ services:
       MUXCORE_INSECURE_DISABLE_TLS: "true"
       MUXCORE_LOG_LEVEL: debug
       MUXCORE_MODULE_ID: encryption-aesgcm
-      ENCRYPTION_GRPC_ADDR: ":9601"
+      ENCRYPTION_GRPC_ADDR: "127.0.0.1:9601"
       ENCRYPTION_MASTER_KEY: ""
     volumes:
       - encryption-keys:/var/lib/encryption-aesgcm

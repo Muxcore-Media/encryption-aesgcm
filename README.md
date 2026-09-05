@@ -50,7 +50,9 @@ Legacy single-line hex files (with or without trailing newline) still load as ke
 |----------|---------|-------------|
 | `ENCRYPTION_MASTER_KEY` | `` | Hex-encoded 32-byte (256-bit) key. Bootstraps a single-key ring (id `0`) when no JSON keyring file exists; overrides a legacy hex file. |
 | `ENCRYPTION_KEY_FILE` | `/var/lib/encryption-aesgcm/master.key` | Path to JSON keyring (or legacy hex). Auto-generated on first boot if neither env nor file exists. A JSON keyring on disk is preferred over `ENCRYPTION_MASTER_KEY` so rotated keys survive restart. |
-| `ENCRYPTION_GRPC_ADDR` | `:9601` | Module EncryptionService gRPC listen address |
+| `ENCRYPTION_GRPC_ADDR` | `127.0.0.1:9601` | Module EncryptionService gRPC listen address (loopback by default) |
+| `ENCRYPTION_MODULE_TOKEN` | `` | Optional bearer token for Encrypt/Decrypt/RotateKey when mesh caller ID is unavailable |
+| `MUXCORE_MODULE_TOKEN` | `` | Alias for `ENCRYPTION_MODULE_TOKEN` |
 | `MUXCORE_GRPC_ADDR` | `` | Core mesh gRPC address (required). Also `--muxcore-mesh-addr`. |
 | `MUXCORE_MODULE_ID` | `encryption-aesgcm` | Module ID override. Also `--muxcore-module-id`. |
 | `MUXCORE_INSECURE_DISABLE_TLS` | `` | Set to `true` to disable TLS to core (dev only). |
@@ -82,7 +84,7 @@ export ENCRYPTION_MASTER_KEY="0123456789abcdef0123456789abcdef0123456789abcdef01
 ```bash
 make docker
 docker run -d --restart=unless-stopped \
-  -e ENCRYPTION_GRPC_ADDR=:9601 \
+  -e ENCRYPTION_GRPC_ADDR=127.0.0.1:9601 \
   -e MUXCORE_GRPC_ADDR=core:9090 \
   -e MUXCORE_INSECURE_DISABLE_TLS=true \
   ghcr.io/muxcore-media/encryption-aesgcm:latest
