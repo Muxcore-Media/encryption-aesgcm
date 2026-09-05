@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Require mesh caller identity, module bearer token, or verified mTLS client certificate for `Encrypt` / `Decrypt` / `RotateKey` gRPC RPCs
+- Default `ENCRYPTION_GRPC_ADDR` to loopback (`127.0.0.1:9601`) instead of all interfaces
+
 ### Added
 
-- Strengthened `TestEncryptRotateRestartDecrypt`: full Start/Stop restart, legacy + multi-key decrypt after rotate, post-restart Encrypt
+- `internal/auth.go` unary interceptor and transport-level auth tests (anonymous, public caller, mesh `x-caller-id`, module token, mTLS client CN)
+- `ENCRYPTION_MODULE_TOKEN` / `MUXCORE_MODULE_TOKEN` for authenticated callers without mesh metadata
 
 ### Changed
 
