@@ -1,7 +1,7 @@
 {
   "name": "Encryption AES-GCM",
   "description": "AES-256-GCM envelope encryption with versioned keyring and key rotation",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "author": "MuxCore",
   "roles": [
     "infrastructure"
