@@ -261,6 +261,7 @@ func TestAuthorizeEncryptionRPC_AcceptsVerifiedMTLSClient(t *testing.T) {
 	clientCreds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{loadKeyPair(clientCert, clientKey)},
 		RootCAs:      certPool(caCert),
+		ServerName:   "encryption-aesgcm",
 		MinVersion:   tls.VersionTLS12,
 	})
 
@@ -339,6 +340,7 @@ func issueTestCert(t *testing.T, caPEM []byte, caKey *ecdsa.PrivateKey, cn strin
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
 		Subject:      pkix.Name{CommonName: cn},
+		DNSNames:     []string{cn},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
