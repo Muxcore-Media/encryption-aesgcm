@@ -23,6 +23,7 @@ import (
 	"github.com/Muxcore-Media/core/pkg/contracts"
 	encryptionv1 "github.com/Muxcore-Media/core/proto/gen/muxcore/encryption/v1"
 	modulesdk "github.com/Muxcore-Media/core/sdk/go/module"
+	manifest "github.com/Muxcore-Media/encryption-aesgcm"
 	"github.com/Muxcore-Media/encryption-aesgcm/internal/grpctls"
 )
 
@@ -100,7 +101,7 @@ func (m *Module) Info() contracts.ModuleInfo {
 	return contracts.ModuleInfo{
 		ID:           m.id,
 		Name:         "Encryption AES-GCM",
-		Version:      "0.2.6",
+		Version:      modulesdk.ManifestVersion(manifest.ManifestJSON),
 		Roles:        []string{"infrastructure"},
 		Description:  "AES-256-GCM envelope encryption with versioned keyring and key rotation",
 		Author:       "MuxCore",
